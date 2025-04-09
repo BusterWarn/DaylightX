@@ -15,5 +15,6 @@ spec:
       containers:
       - name: arvaker-container
         image: arvaker:latest
+        imagePullPolicy: Never
         ports:
-        - containerPort: 8080
+            - containerPort: 8080:8080
