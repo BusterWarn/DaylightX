@@ -1,7 +1,7 @@
 package main
 
-import "core:fmt"
 import "core:log"
+import "core:strings"
 
 import http "../lib/odin-http/"
 import "../lib/odin-http/client"
@@ -11,46 +11,149 @@ main :: proc() {
 
 	server: http.Server
 
-	handler := http.handler(handle_request)
+	handler := http.handler(handle_client_request)
 	http.server_shutdown_on_interrupt(&server)
 
-	fmt.printf("Server stopped: %s", http.listen_and_serve(&server, handler))
+	log.info("Server stopped: %s", http.listen_and_serve(&server, handler))
 }
 
-handle_request :: proc(request: ^http.Request, res: ^http.Response) {
-	fmt.println(request.url.query)
-	sun_data := get()
+Query :: struct {
+	longitude: string,
+	latitude:  string,
+	date:      string,
+	offset:    string,
+}
+
+ParseError :: enum {
+	NoQuery,
+	MalformedQuery,
+	IncorrectNumberOfSubQueries,
+	MissingArgument,
+}
+
+ParseResult :: union {
+	Query,
+	ParseError,
+}
+
+parse_request_query :: proc(query: string) -> ParseResult {
+	if len(query) == 0 {
+		log.warn("Got no query")
+		return ParseError.NoQuery
+	}
+
+	sub_queries, query_err := strings.split(query, "&")
+	defer delete(sub_queries)
+	if query_err != nil {
+		log.warn("Got malformed query", query)
+		return ParseError.MalformedQuery
+	}
+
+	expected_number_of_sub_queries :: 4
+	if len(sub_queries) != expected_number_of_sub_queries {
+		log.warn(
+			"Got incorrect number of sub queries, expected",
+			expected_number_of_sub_queries,
+			", got",
+			len(sub_queries),
+		)
+		return ParseError.MalformedQuery
+	}
+
+	query := Query {
+		longitude = "",
+		latitude  = "",
+		date      = "",
+		offset    = "",
+	}
+
+	for sub_query in sub_queries {
+		sub_sub_query, query_err := strings.split(sub_query, "=")
+		defer delete(sub_sub_query)
+		if query_err != nil || len(sub_sub_query) != 2 {
+			log.warn("Got malformed query", sub_query)
+			return ParseError.MalformedQuery
+		}
+
+		if sub_sub_query[0] == "longitude" {
+			query.longitude = sub_sub_query[1]
+		} else if sub_sub_query[0] == "latitude" {
+			query.latitude = sub_sub_query[1]
+		} else if sub_sub_query[0] == "date" {
+			query.date = sub_sub_query[1]
+		} else if sub_sub_query[0] == "offset" {
+			query.offset = sub_sub_query[1]
+		}
+	}
+
+	if query.longitude == "" || query.latitude == "" || query.date == "" || query.offset == "" {
+		return ParseError.MissingArgument
+	}
+
+	return query
+}
+
+handle_client_request :: proc(request: ^http.Request, response: ^http.Response) {
+	query := parse_request_query(request.url.query[:])
+
+	switch q in query {
+	case ParseError:
+		{
+			response.status = .Bad_Request
+			http.respond(response)
+			return
+		}
+	case Query:
+		handle_client_query(q, response)
+	}
+}
+
+handle_client_query :: proc(query: Query, response: ^http.Response) {
+	sun_data := get_sun_data(query)
 	switch v in sun_data {
 	case string:
 		{
-			res.status = .OK
-			http.body_set_str(res, sun_data.(string))
-			http.respond(res)
+			response.status = .OK
+			http.body_set_str(response, sun_data.(string))
+			http.respond(response)
 		}
 	}
 }
 
-get :: proc() -> Maybe(string) {
-	res, err := client.get(
-		"https://api.met.no/weatherapi/sunrise/3.0/sun?lat=63.8258&lon=20.2630&date=2025-03-26&offset=+01:00",
-	)
+build_request_url :: proc(query: Query) -> string {
+	parts := [?]string {
+		"https://api.met.no/weatherapi/sunrise/3.0/sun?",
+		"lat=",
+		query.latitude,
+		"&lon=",
+		query.longitude,
+		"&date=",
+		query.date,
+		"&offset=",
+		query.offset,
+	}
+	return strings.concatenate(parts[:])
+}
+
+get_sun_data :: proc(query: Query) -> Maybe(string) {
+	request_url := build_request_url(query)
+	defer delete(request_url)
+
+	res, err := client.get(request_url)
 	if err != nil {
-		fmt.printf("Request failed: %s", err)
+		log.error("Request failed: %s", err)
 		return nil
 	}
 	defer client.response_destroy(&res)
 
-	// fmt.printf("Status: %s\n", res.status)
-	// fmt.printf("Headers: %v\n", res.headers)
-	// fmt.printf("Cookies: %v\n", res.cookies)
 	body, allocation, berr := client.response_body(&res)
 	if berr != nil {
-		fmt.printf("Error retrieving response body: %s", berr)
+		log.error("Error retrieving response body: %s", berr)
 		return nil
 	}
 	defer client.body_destroy(body, allocation)
 
-	fmt.println(body)
+	log.debug(body)
 
 	if i, ok := body.(client.Body_Plain); ok {
 		return i
