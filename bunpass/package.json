@@ -1,0 +1,20 @@
+{
+  "name": "bunpass.",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.js",
+    "dev": "bun --watch index.js",
+    "build": "mkdir -p dist && cp -r public dist/"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "hono": "^3.5.0"
+  },
+}
