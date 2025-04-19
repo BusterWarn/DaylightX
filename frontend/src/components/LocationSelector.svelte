@@ -11,7 +11,6 @@
 </script>
 
 <div class="location-selector">
-  <label for="location">Location:</label>
   <select id="location" value={selected.name} on:change={handleSelect}>
     {#each locations as location}
       <option value={location.name}>{location.name}</option>
@@ -22,29 +21,26 @@
 <style>
   .location-selector {
     background-color: rgba(0, 0, 0, 0.5);
-    padding: 10px 15px;
+    padding: 8px 12px;
     border-radius: 8px;
     display: flex;
     align-items: center;
-    gap: 10px;
     color: white;
     font-size: 14px;
     backdrop-filter: blur(5px);
-  }
-
-  label {
-    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
   select {
     background-color: rgba(255, 255, 255, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.4);
     color: white;
-    padding: 5px 10px;
+    padding: 4px 8px;
     border-radius: 4px;
     outline: none;
     cursor: pointer;
     font-size: 14px;
+    width: 120px;
   }
 
   select:hover {

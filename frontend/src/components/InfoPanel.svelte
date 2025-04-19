@@ -30,21 +30,19 @@
 </script>
 
 <div class="info-panel">
-  <div class="info-row">
-    <span class="info-label">Time:</span>
-    <span class="info-value">{formatTime(time)}</span>
-  </div>
-  <div class="info-row">
-    <span class="info-label">Location:</span>
-    <span class="info-value">{location.name}</span>
-  </div>
-  <div class="info-row">
-    <span class="info-label">Day Progress:</span>
-    <span class="info-value">{formatProgress(progress)}%</span>
-  </div>
-  <div class="info-row">
-    <span class="info-label">Phase:</span>
-    <span class="info-value">{phase}</span>
+  <div class="info-content">
+    <div class="info-row">
+      <span class="info-label">Time:</span>
+      <span class="info-value">{formatTime(time)}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Day Progress:</span>
+      <span class="info-value">{formatProgress(progress)}%</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Phase:</span>
+      <span class="info-value">{phase}</span>
+    </div>
   </div>
 </div>
 
@@ -55,22 +53,25 @@
     right: 20px;
     background-color: rgba(0, 0, 0, 0.5);
     color: white;
-    padding: 12px;
+    padding: 10px;
     border-radius: 8px;
     font-family: 'Helvetica Neue', Arial, sans-serif;
     backdrop-filter: blur(5px);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    min-width: 200px;
+    min-width: 180px;
+    z-index: 100;
+  }
+
+  .info-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .info-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 6px;
-  }
-
-  .info-row:last-child {
-    margin-bottom: 0;
+    font-size: 14px;
   }
 
   .info-label {
