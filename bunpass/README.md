@@ -1,6 +1,7 @@
-# bunpass.
+# BunPass
 
-Like a compass, but with a bun instead of a com.
+Microservice for [DaylightX](https://github.com/BusterWarn/DaylightX) built with Bun.
+Like a compass, but with a bun instead of a com. 👯
 
 Use `/api/locations` to get recommended locations.
 To get coordinates, `/location?place=Kiruna%2C Sweden` :
@@ -37,3 +38,20 @@ PORT=8080 bun start
 ```
 
 This project was created using `bun init` in bun v1.2.9. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+
+
+## Docker
+
+### Build Docker Image
+
+```bash
+docker build -t daylightx-bunpass .
+```
+
+### Run Docker Container
+
+```bash
+docker run -p 3000:3000 daylightx-bunpass
+```
+
+Access the service at http://localhost:3000
