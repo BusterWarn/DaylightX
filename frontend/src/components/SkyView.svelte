@@ -15,82 +15,155 @@
   export let height = 500;
 
   // Initial state
-  let sunriseTime, sunsetTime, solarNoon;
   let dayProgress = 0;
   let dayPhase = '';
 
-  // Calculate sunrise and sunset times
-  function calculateDayTimes() {
-    // For a real app, we would calculate the actual sunrise/sunset times
-    // based on date and geographical coordinates. For now, we'll use simplified times.
-    const today = new Date();
+  /**
+  * Creates a date with a specified hour and minute offset from local time
+  * @param {Object} options - Options for time offset
+  * @param {number} [options.hourOffset=0] - Hours to offset (positive or negative)
+  * @param {number} [options.minuteOffset=0] - Minutes to offset (positive or negative)
+  * @returns {Date} - New date object with the specified offset applied
+  */
+  function getTimeWithOffset({ hourOffset = 0, minuteOffset = 0 } = {}) {
+    // Get current date
+    const date = new Date();
 
-    // Create a date object for today at midnight in local time
-    const localMidnight = new Date(today);
-    localMidnight.setHours(0, 0, 0, 0);
+    // Get current local hour and minute
+    const localHours = date.getHours();
+    const localMinutes = date.getMinutes();
 
-    // Create a new date object for midnight in the selected timezone
-    const timezoneMidnight = new Date(localMidnight);
+    // Calculate new hour and minute with offset
+    const newHours = (localHours + hourOffset + Math.floor((localMinutes + minuteOffset) / 60)) % 24;
+    const newMinutes = (localMinutes + minuteOffset) % 60;
 
-    // Adjust for timezone if not using local time
-    if (location.name !== "Local") {
-      const localOffset = -timezoneMidnight.getTimezoneOffset() / 60;
-      const hourDifference = location.offset - localOffset;
-      timezoneMidnight.setHours(timezoneMidnight.getHours() + hourDifference);
-    }
+    // Handle negative minutes
+    const adjustedHours = newHours + (newMinutes < 0 ? -1 : 0);
+    const adjustedMinutes = newMinutes < 0 ? newMinutes + 60 : newMinutes;
 
-    // Set sunrise, solar noon, and sunset times
-    sunriseTime = new Date(timezoneMidnight);
-    sunriseTime.setHours(6, 0, 0, 0);
+    // Create a new date object
+    const newDate = new Date(date);
 
-    solarNoon = new Date(timezoneMidnight);
-    solarNoon.setHours(12, 0, 0, 0);
+    // Set the new hours and minutes
+    newDate.setHours(adjustedHours < 0 ? adjustedHours + 24 : adjustedHours);
+    newDate.setMinutes(adjustedMinutes);
 
-    sunsetTime = new Date(timezoneMidnight);
-    sunsetTime.setHours(18, 0, 0, 0);
+    return newDate;
   }
 
-  // Calculate sun position based on current time
-  function calculateDayProgress() {
-    let now = new Date();
+  /**
+  * Creates a date for the current day with specified hours and minutes from midnight,
+  * with optional hour and minute offsets
+  * @param {Object} options - Options for time specification
+  * @param {number} [options.hours=0] - Base hours from midnight (0-23)
+  * @param {number} [options.minutes=0] - Base minutes from midnight (0-59)
+  * @param {number} [options.hourOffset=0] - Additional hours to offset (positive or negative)
+  * @param {number} [options.minuteOffset=0] - Additional minutes to offset (positive or negative)
+  * @returns {Date} - New date object set to the specified time on the current day
+  */
+  function getTimeOfDay({ hours = 0, minutes = 0, hourOffset = 0, minuteOffset = 0 } = {}) {
+    // Create a new date for today
+    const date = new Date();
 
-    // Adjust time for selected timezone if not local
-    if (location.name !== "Local") {
-      const localOffset = -now.getTimezoneOffset() / 60;
-      const hourDifference = location.offset - localOffset;
-      now = new Date(now.getTime() + hourDifference * 60 * 60 * 1000);
+    // Reset to midnight
+    date.setHours(0, 0, 0, 0);
+
+    // Calculate total minutes, including offsets
+    const totalHours = hours + hourOffset;
+    const totalMinutes = minutes + minuteOffset;
+
+    // Calculate final hours and minutes, handling potential negative values
+    let finalHours = totalHours + Math.floor(totalMinutes / 60);
+    let finalMinutes = totalMinutes % 60;
+
+    // Handle negative minutes
+    if (finalMinutes < 0) {
+      finalMinutes += 60;
+      finalHours -= 1;
     }
 
-    // Calculate progress (0 = sunrise, 0.5 = noon, 1 = sunset)
+    // Handle hour wrapping (keeping within same day)
+    while (finalHours < 0) finalHours += 24;
+    finalHours = finalHours % 24;
+
+    // Set the time
+    date.setHours(finalHours, finalMinutes);
+
+    return date;
+  }
+
+  // Calculate sunrise and sunset times
+  // For a real app, we would calculate the actual sunrise/sunset times
+  // based on date and geographical coordinates. For now, we'll use simplified times.
+  function calculateDayTimes(offset = 0) {
+    return {
+      sunriseTime: getTimeOfDay({ hours: 6, minutes: 0, hourOffset: offset }),
+      sunsetTime: getTimeOfDay({ hours: 18, minutes: 0, hourOffset: offset })
+    };
+  }
+
+  /**
+  * Maps a time value from one range to another
+  * @param {Date} time - The time to map
+  * @param {Date} startTime - Start of the input range
+  * @param {Date} endTime - End of the input range
+  * @param {number} outMin - Start of the output range
+  * @param {number} outMax - End of the output range
+  * @returns {number} - Mapped value
+  */
+  function mapTimeRange(time, startTime, endTime, outMin, outMax) {
+    const timeValue = time.getTime();
+    const startValue = startTime.getTime();
+    const endValue = endTime.getTime();
+
+    // Calculate percentage within range
+    const percentage = (timeValue - startValue) / (endValue - startValue);
+
+    // Map to output range
+    return outMin + percentage * (outMax - outMin);
+  }
+
+  /**
+  * Determines the day phase based on day progress value
+  * @param {number} progress - Day progress value (-0.25 to 1.25)
+  * @returns {string} - Human-readable day phase
+  */
+  function getDayPhase(progress) {
+    if (progress < 0) return "Night (pre-dawn)";
+    if (progress < 0.1) return "Sunrise";
+    if (progress < 0.4) return "Morning";
+    if (progress < 0.6) return "Midday";
+    if (progress < 0.9) return "Afternoon";
+    if (progress < 1) return "Sunset";
+    return "Night";
+  }
+
+  /**
+  * Calculate sun position and day phase based on current time
+  * @param {Object} location - Location information with timezone offset
+  * @param {Date} sunriseTime - Today's sunrise time
+  * @param {Date} sunsetTime - Today's sunset time
+  * @returns {number} dayProgress (0-1.25)
+  */
+  function calculateDayProgress(location, sunriseTime, sunsetTime) {
+    // Get current time adjusted for location's timezone
+    const now = getTimeWithOffset({ hourOffset: location.offset });
+
+    // Get midnight and next midnight for calculations
+    const midnight = getTimeOfDay({});
+    const nextMidnight = getTimeOfDay({ hours: 24 });
+
+    // Calculate progress based on time of day
     if (now < sunriseTime) {
-      // Before sunrise (night)
-      const midnight = new Date(sunriseTime);
-      midnight.setHours(0, 0, 0, 0);
-      const msSinceMidnight = now - midnight;
-      const msUntilSunrise = sunriseTime - midnight;
-      dayProgress = -0.25 + (msSinceMidnight / msUntilSunrise) * 0.25;
+      // Before sunrise (night): -0.25 to 0
+      return mapTimeRange(now, midnight, sunriseTime, -0.25, 0);
     } else if (now > sunsetTime) {
-      // After sunset (night)
-      const msSinceSunset = now - sunsetTime;
-      const midnight = new Date(sunsetTime);
-      midnight.setHours(24, 0, 0, 0);
-      const msUntilMidnight = midnight - sunsetTime;
-      dayProgress = 1 + (msSinceSunset / msUntilMidnight) * 0.25;
+      // After sunset (night): 1 to 1.25
+      return mapTimeRange(now, sunsetTime, nextMidnight, 1, 1.25);
     } else {
-      // During day
-      const msTotal = sunsetTime - sunriseTime;
-      const msCurrent = now - sunriseTime;
-      dayProgress = msCurrent / msTotal;
+      // During day: 0 to 1
+      return mapTimeRange(now, sunriseTime, sunsetTime, 0, 1);
     }
-
-    // Determine day phase
-    if (dayProgress < 0) dayPhase = "Night (pre-dawn)";
-    else if (dayProgress < 0.1) dayPhase = "Sunrise";
-    else if (dayProgress < 0.4) dayPhase = "Morning";
-    else if (dayProgress < 0.6) dayPhase = "Midday";
-    else if (dayProgress < 0.9) dayPhase = "Afternoon";
-    else if (dayProgress < 1) dayPhase = "Sunset";
-    else dayPhase = "Night";
   }
 
   // Get sky color based on time of day
@@ -135,14 +208,17 @@
 
   // Update view when location or time changes
   $: if (location || currentTime) {
-    calculateDayTimes();
-    calculateDayProgress();
+    currentTime = getTimeWithOffset({ hourOffset: location.offset });
+    const { sunriseTime, sunsetTime } = calculateDayTimes();
+    dayProgress = calculateDayProgress(location, sunriseTime, sunsetTime);
+    dayPhase = getDayPhase(dayProgress);
   }
 
   // Initialize on mount
   onMount(() => {
-    calculateDayTimes();
-    calculateDayProgress();
+    const { sunriseTime, sunsetTime } = calculateDayTimes();
+    dayProgress = calculateDayProgress(location, sunriseTime, sunsetTime);
+    dayPhase = getDayPhase(dayProgress);
   });
 </script>
 
