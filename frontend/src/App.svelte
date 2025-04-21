@@ -1,14 +1,8 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { fade } from 'svelte/transition';
-  import Sun from './components/Sun.svelte';
-  import Moon from './components/Moon.svelte';
-  import Stars from './components/Stars.svelte';
-  import LocationSelector from './components/LocationSelector.svelte';
-  import InfoPanel from './components/InfoPanel.svelte';
+  import { getLocations } from './lib/locations';
   import SkyView from './components/SkyView.svelte';
 
-  // Available locations with timezone offsets
   const locations = [
     { name: "Local", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, offset: 0 },
     { name: "New York", timezone: "America/New_York", offset: -4 }, // EDT
@@ -16,6 +10,11 @@
     { name: "Tokyo", timezone: "Asia/Tokyo", offset: 9 },
     { name: "Sydney", timezone: "Australia/Sydney", offset: 10 }
   ];
+
+  onMount(async () => {
+    // TODO: Make getting locations... Better. And async.
+    console.log(await getLocations());
+  });
 
   // Initial state for two views
   let topLocation = locations[0]; // Default to local time

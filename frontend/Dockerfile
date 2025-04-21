@@ -26,6 +26,7 @@ RUN echo 'server {\
     listen 8080;\
     root /usr/share/nginx/html;\
     index index.html;\
+    add_header Cache-Control "no-store, no-cache, must-revalidate";\
     location / {\
         try_files $uri $uri/ /index.html;\
     }\

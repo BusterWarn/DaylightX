@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+data:
+  BUN_URL: "http://192.168.49.2:31707"
+  FEATURE_FLAG: "true"
