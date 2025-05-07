@@ -30,10 +30,16 @@ RUN echo 'server {\
     location / {\
         try_files $uri $uri/ /index.html;\
     }\
+    location /api/bunpass {\
+        proxy_pass http://bunpass-service:3000/api/locations;\
+        proxy_set_header Host $host;\
+        proxy_set_header X-Real-IP $remote_addr;\
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\
+        proxy_set_header X-Forwarded-Proto $scheme;\
+    }\
 }' > /etc/nginx/conf.d/default.conf
 
 # Expose port 8080
 EXPOSE 8080
 
-# Start Nginx
 CMD ["nginx", "-g", "daemon off;"]
