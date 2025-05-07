@@ -6,6 +6,7 @@ set -e
 # Default values
 DEPLOY_FRONTEND=false
 DEPLOY_BUNPASS=false
+DEPLOY_DELOREAN=false
 DEPLOY_ALL=false
 
 # Display help information
@@ -16,6 +17,7 @@ function show_help {
   echo "  -a, --all        Deploy all services"
   echo "  -f, --frontend   Deploy frontend service"
   echo "  -b, --bunpass    Deploy bunpass service"
+  echo "  -d, --delorean    Deploy delorean service"
   echo "Example: ./deploy.sh --frontend --bunpass"
   echo "Example: ./deploy.sh --all"
 }
@@ -39,6 +41,10 @@ while [[ $# -gt 0 ]]; do
     DEPLOY_BUNPASS=true
     shift
     ;;
+  -d | --delorean)
+    DEPLOY_DELOREAN=true
+    shift
+    ;;
   *)
     echo "Unknown option: $1"
     show_help
@@ -48,19 +54,21 @@ while [[ $# -gt 0 ]]; do
 done
 
 # If no options specified, prompt user
-if [[ "$DEPLOY_ALL" == "false" && "$DEPLOY_FRONTEND" == "false" && "$DEPLOY_BUNPASS" == "false" ]]; then
+if [[ "$DEPLOY_ALL" == "false" && "$DEPLOY_FRONTEND" == "false" && "$DEPLOY_BUNPASS" == "false" && "$DEPLOY_DELOREAN" == "false" ]]; then
   echo "No services specified. What would you like to deploy?"
   echo "1) All services"
   echo "2) Frontend only"
   echo "3) Bunpass only"
-  echo "4) Exit"
-  read -p "Enter choice [1-4]: " choice
+  echo "4) Delorean only"
+  echo "5) Exit"
+  read -p "Enter choice [1-5]: " choice
 
   case $choice in
   1) DEPLOY_ALL=true ;;
   2) DEPLOY_FRONTEND=true ;;
   3) DEPLOY_BUNPASS=true ;;
-  4) exit 0 ;;
+  4) DEPLOY_DELOREAN=true ;;
+  5) exit 0 ;;
   *)
     echo "Invalid choice. Exiting."
     exit 1
@@ -72,6 +80,7 @@ fi
 if [[ "$DEPLOY_ALL" == "true" ]]; then
   DEPLOY_FRONTEND=true
   DEPLOY_BUNPASS=true
+  DEPLOY_DELOREAN=true
 fi
 
 # Generate a unique tag
@@ -105,9 +114,6 @@ function deploy_bunpass {
   echo "Building bunpass Docker image..."
   docker build -t daylightx-bunpass:latest ./bunpass/
 
-  echo "Loading image into Minikube..."
-  minikube image load daylightx-bunpass:latest
-
   echo "Applying kubernetes manifests..."
   kubectl apply -f ./bunpass/kubernetes/bunpass.yaml
 
@@ -120,6 +126,28 @@ function deploy_bunpass {
   echo "Bunpass deployed successfully!"
 }
 
+# Function to deploy delorean
+function deploy_delorean {
+  echo "===== Deploying delorean ====="
+  echo "Building delorean Docker image with $TAG..."
+  docker build -t delorean:$TAG ./delorean/
+
+  echo "Applying kubernetes manifests..."
+  kubectl apply -f ./delorean/deployment.yaml
+  kubectl apply -f ./delorean/service.yaml
+
+  echo "Setting deployment to use image delorean:$TAG..."
+  kubectl set image deployment/delorean delorean=delorean:$TAG
+
+  echo "Restarting bunpass deployment..."
+  kubectl rollout restart deployment delorean
+
+  echo "Waiting for deployment to complete..."
+  kubectl rollout status deployment delorean
+
+  echo "Bunpass deployed successfully!"
+}
+
 # Deploy services according to flags
 if [[ "$DEPLOY_FRONTEND" == "true" ]]; then
   deploy_frontend
@@ -127,6 +155,10 @@ fi
 
 if [[ "$DEPLOY_BUNPASS" == "true" ]]; then
   deploy_bunpass
+fi
+
+if [[ "$DEPLOY_DELOREAN" == "true" ]]; then
+  deploy_delorean
 fi
 
 # Show service URLs
