@@ -7,6 +7,7 @@ set -e
 DEPLOY_FRONTEND=false
 DEPLOY_BUNPASS=false
 DEPLOY_DELOREAN=false
+DEPLOY_JANUS=false
 DEPLOY_ALL=false
 
 # Display help information
@@ -18,6 +19,7 @@ function show_help {
   echo "  -f, --frontend   Deploy frontend service"
   echo "  -b, --bunpass    Deploy bunpass service"
   echo "  -d, --delorean    Deploy delorean service"
+  echo "  -j, --janus      Deploy Janus service"
   echo "Example: ./deploy.sh --frontend --bunpass"
   echo "Example: ./deploy.sh --all"
 }
@@ -45,6 +47,10 @@ while [[ $# -gt 0 ]]; do
     DEPLOY_DELOREAN=true
     shift
     ;;
+  -j | --janus)
+    DEPLOY_JANUS=true
+    shift
+    ;;
   *)
     echo "Unknown option: $1"
     show_help
@@ -54,21 +60,29 @@ while [[ $# -gt 0 ]]; do
 done
 
 # If no options specified, prompt user
-if [[ "$DEPLOY_ALL" == "false" && "$DEPLOY_FRONTEND" == "false" && "$DEPLOY_BUNPASS" == "false" && "$DEPLOY_DELOREAN" == "false" ]]; then
+if [[ 
+  "$DEPLOY_ALL" == "false" &&
+  "$DEPLOY_FRONTEND" == "false" &&
+  "$DEPLOY_BUNPASS" == "false" &&
+  "$DEPLOY_DELOREAN" == "false" &&
+  "$DEPLOY_JANUS" == "false" ]] \
+  ; then
   echo "No services specified. What would you like to deploy?"
   echo "1) All services"
   echo "2) Frontend only"
   echo "3) Bunpass only"
   echo "4) Delorean only"
-  echo "5) Exit"
-  read -p "Enter choice [1-5]: " choice
+  echo "5) Janus only"
+  echo "6) Exit"
+  read -p "Enter choice [1-6]: " choice
 
   case $choice in
   1) DEPLOY_ALL=true ;;
   2) DEPLOY_FRONTEND=true ;;
   3) DEPLOY_BUNPASS=true ;;
   4) DEPLOY_DELOREAN=true ;;
-  5) exit 0 ;;
+  5) DEPLOY_JANUS=true ;;
+  6) exit 0 ;;
   *)
     echo "Invalid choice. Exiting."
     exit 1
@@ -81,6 +95,7 @@ if [[ "$DEPLOY_ALL" == "true" ]]; then
   DEPLOY_FRONTEND=true
   DEPLOY_BUNPASS=true
   DEPLOY_DELOREAN=true
+  DEPLOY_JANUS=true
 fi
 
 # Generate a unique tag
@@ -139,13 +154,45 @@ function deploy_delorean {
   echo "Setting deployment to use image delorean:$TAG..."
   kubectl set image deployment/delorean delorean=delorean:$TAG
 
-  echo "Restarting bunpass deployment..."
+  echo "Restarting delorean deployment..."
   kubectl rollout restart deployment delorean
 
   echo "Waiting for deployment to complete..."
   kubectl rollout status deployment delorean
 
-  echo "Bunpass deployed successfully!"
+  echo "Delorean deployed successfully!"
+}
+
+# Function to deploy janus
+function deploy_janus {
+  echo "===== Deploying Janus ====="
+
+  # Check if the secret exists, if not create it
+  if ! kubectl get secret janus-secrets &>/dev/null; then
+    echo "Creating janus-secrets..."
+    # Generate a random key using openssl (available in most environments)
+    SECRET_KEY=$(openssl rand -base64 48)
+    kubectl create secret generic janus-secrets --from-literal=SECRET_KEY_BASE=$SECRET_KEY
+  fi
+
+  echo "Building janus Docker image... $TAG"
+  docker build -t daylightx-janus:$TAG ./janus/
+
+  echo "Applying kubernetes manifests..."
+  kubectl apply -f ./janus/kubernetes/janus.yaml
+
+  echo "Setting deployment to use image daylightx-janus:$TAG..."
+  kubectl set image deployment/janus-deployment janus=daylightx-janus:$TAG
+
+  echo "Restarting janus deployment..."
+  # Change this line to use janus-deployment instead of janus
+  kubectl rollout restart deployment janus-deployment
+
+  echo "Waiting for deployment to complete..."
+  # Change this line as well
+  kubectl rollout status deployment janus-deployment
+
+  echo "Janus deployed successfully!"
 }
 
 # Deploy services according to flags
@@ -161,6 +208,10 @@ if [[ "$DEPLOY_DELOREAN" == "true" ]]; then
   deploy_delorean
 fi
 
+if [[ "$DEPLOY_JANUS" == "true" ]]; then
+  deploy_janus
+fi
+
 # Show service URLs
 echo ""
 echo "===== Service URLs ====="
@@ -174,6 +225,14 @@ fi
 
 if [[ "$DEPLOY_BUNPASS" == "true" ]] || [[ "$DEPLOY_ALL" == "true" ]]; then
   echo "Bunpass (internal): http://bunpass-service:3000"
+fi
+
+if [[ "$DEPLOY_DELOREAN" == "true" ]] || [[ "$DEPLOY_ALL" == "true" ]]; then
+  echo "Delorean (internal): http://delorean:8000"
+fi
+
+if [[ "$DEPLOY_JANUS" == "true" ]] || [[ "$DEPLOY_ALL" == "true" ]]; then
+  echo "Janus (internal): http://janus-service:4000"
 fi
 
 echo ""

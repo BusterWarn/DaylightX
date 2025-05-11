@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: janus-deployment
+  labels:
+    app: janus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: janus
+  template:
+    metadata:
+      labels:
+        app: janus
+    spec:
+      containers:
+      - name: janus
+        image: daylightx-janus:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 4000
+        env:
+        - name: SECRET_KEY_BASE
+          valueFrom:
+            secretKeyRef:
+              name: janus-secrets
+              key: SECRET_KEY_BASE
+        - name: PHX_SERVER
+          value: "true"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: janus-service
+spec:
+  type: ClusterIP
+  selector:
+    app: janus
+  ports:
+    - protocol: TCP
+      port: 4000
+      targetPort: 4000
+
