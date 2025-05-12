@@ -8,6 +8,7 @@ DEPLOY_FRONTEND=false
 DEPLOY_BUNPASS=false
 DEPLOY_DELOREAN=false
 DEPLOY_JANUS=false
+DEPLOY_ARVAKER=false
 DEPLOY_ALL=false
 
 # Display help information
@@ -15,11 +16,12 @@ function show_help {
   echo "Usage: ./deploy.sh [options]"
   echo "Options:"
   echo "  -h, --help       Display this help message"
-  echo "  -a, --all        Deploy all services"
+  echo "  -A, --all        Deploy all services"
   echo "  -f, --frontend   Deploy frontend service"
   echo "  -b, --bunpass    Deploy bunpass service"
   echo "  -d, --delorean    Deploy delorean service"
   echo "  -j, --janus      Deploy Janus service"
+  echo "  -a, --arvaker      Deploy Janus service"
   echo "Example: ./deploy.sh --frontend --bunpass"
   echo "Example: ./deploy.sh --all"
 }
@@ -31,7 +33,7 @@ while [[ $# -gt 0 ]]; do
     show_help
     exit 0
     ;;
-  -a | --all)
+  -A | --all)
     DEPLOY_ALL=true
     shift
     ;;
@@ -51,6 +53,10 @@ while [[ $# -gt 0 ]]; do
     DEPLOY_JANUS=true
     shift
     ;;
+  -a | --arvaker)
+    DEPLOY_ARVAKER=true
+    shift
+    ;;
   *)
     echo "Unknown option: $1"
     show_help
@@ -65,7 +71,8 @@ if [[
   "$DEPLOY_FRONTEND" == "false" &&
   "$DEPLOY_BUNPASS" == "false" &&
   "$DEPLOY_DELOREAN" == "false" &&
-  "$DEPLOY_JANUS" == "false" ]] \
+  "$DEPLOY_JANUS" == "false" &&
+  "$DEPLOY_ARVAKER" == "false" ]] \
   ; then
   echo "No services specified. What would you like to deploy?"
   echo "1) All services"
@@ -73,8 +80,9 @@ if [[
   echo "3) Bunpass only"
   echo "4) Delorean only"
   echo "5) Janus only"
-  echo "6) Exit"
-  read -p "Enter choice [1-6]: " choice
+  echo "6) Arvaker only"
+  echo "7) Exit"
+  read -p "Enter choice [1-7]: " choice
 
   case $choice in
   1) DEPLOY_ALL=true ;;
@@ -82,7 +90,8 @@ if [[
   3) DEPLOY_BUNPASS=true ;;
   4) DEPLOY_DELOREAN=true ;;
   5) DEPLOY_JANUS=true ;;
-  6) exit 0 ;;
+  6) DEPLOY_ARVAKER=true ;;
+  7) exit 0 ;;
   *)
     echo "Invalid choice. Exiting."
     exit 1
@@ -96,6 +105,7 @@ if [[ "$DEPLOY_ALL" == "true" ]]; then
   DEPLOY_BUNPASS=true
   DEPLOY_DELOREAN=true
   DEPLOY_JANUS=true
+  DEPLOY_ARVAKER=true
 fi
 
 # Generate a unique tag
@@ -169,6 +179,28 @@ function deploy_delorean {
   echo "Delorean deployed successfully!"
 }
 
+# Function to deploy arvaker
+function deploy_arvaker {
+  echo "===== Deploying arvaker ====="
+  echo "Building arvaker Docker image with $TAG..."
+  docker build -t arvaker:$TAG ./arvaker/
+
+  echo "Applying kubernetes manifests..."
+  kubectl apply -f ./arvaker/deployment.yaml
+  kubectl apply -f ./arvaker/service.yaml
+
+  echo "Setting deployment to use image arvaker:$TAG..."
+  kubectl set image deployment/arvaker-deployment arvaker=arvaker:$TAG
+
+  echo "Restarting arvaker deployment..."
+  kubectl rollout restart deployment arvaker-deployment
+
+  echo "Waiting for deployment to complete..."
+  kubectl rollout status deployment arvaker-deployment
+
+  echo "Arvaker deployed successfully!"
+}
+
 # Function to deploy janus
 function deploy_janus {
   echo "===== Deploying Janus ====="
@@ -202,10 +234,6 @@ function deploy_janus {
 }
 
 # Deploy services according to flags
-if [[ "$DEPLOY_FRONTEND" == "true" ]]; then
-  deploy_frontend
-fi
-
 if [[ "$DEPLOY_BUNPASS" == "true" ]]; then
   deploy_bunpass
 fi
@@ -216,6 +244,15 @@ fi
 
 if [[ "$DEPLOY_JANUS" == "true" ]]; then
   deploy_janus
+fi
+
+if [[ "$DEPLOY_ARVAKER" == "true" ]]; then
+  deploy_arvaker
+fi
+
+# Ensure frontend is deployed last
+if [[ "$DEPLOY_FRONTEND" == "true" ]]; then
+  deploy_frontend
 fi
 
 # Show service URLs
@@ -239,6 +276,10 @@ fi
 
 if [[ "$DEPLOY_JANUS" == "true" ]] || [[ "$DEPLOY_ALL" == "true" ]]; then
   echo "Janus (internal): http://janus-service:4000"
+fi
+
+if [[ "$DEPLOY_ARVAKER" == "true" ]] || [[ "$DEPLOY_ALL" == "true" ]]; then
+  echo "Arvaker (internal): http://arvaker-service:8000"
 fi
 
 echo ""
