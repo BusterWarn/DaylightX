@@ -126,17 +126,23 @@ function deploy_frontend {
 # Function to deploy bunpass
 function deploy_bunpass {
   echo "===== Deploying Bunpass ====="
-  echo "Building bunpass Docker image..."
-  docker build -t daylightx-bunpass:latest ./bunpass/
+
+  echo "Building bunpass Docker image... $TAG"
+  docker build -t daylightx-bunpass:$TAG ./bunpass/
 
   echo "Applying kubernetes manifests..."
   kubectl apply -f ./bunpass/kubernetes/bunpass.yaml
 
+  echo "Setting deployment to use image daylightx-bunpass:$TAG..."
+  kubectl set image deployment/bunpass-deployment bunpass=daylightx-bunpass:$TAG
+
   echo "Restarting bunpass deployment..."
-  kubectl rollout restart deployment bunpass
+  # Change this line to use bunpass-deployment instead of bunpass
+  kubectl rollout restart deployment bunpass-deployment
 
   echo "Waiting for deployment to complete..."
-  kubectl rollout status deployment bunpass
+  # Change this line as well
+  kubectl rollout status deployment bunpass-deployment
 
   echo "Bunpass deployed successfully!"
 }
