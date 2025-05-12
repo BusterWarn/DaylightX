@@ -13,7 +13,13 @@ const DEFAULT_LOCATIONS = [
  */
 export async function getLocations() {
   try {
-    const response = await fetch(`/api/health`);
+    const response = await fetch('/api/janus', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ location: 'Visby, Sweden' })
+    });
     if (response.ok) {
       const data = await response.json();
       if (data) {

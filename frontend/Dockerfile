@@ -22,29 +22,7 @@ FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 
 # Copy a custom nginx configuration to serve the SPA properly
-RUN echo 'server {\
-    listen 8080;\
-    root /usr/share/nginx/html;\
-    index index.html;\
-    add_header Cache-Control "no-store, no-cache, must-revalidate";\
-    location / {\
-        try_files $uri $uri/ /index.html;\
-    }\
-    location /api/bunpass {\
-        proxy_pass http://bunpass-service:3000/api/locations;\
-        proxy_set_header Host $host;\
-        proxy_set_header X-Real-IP $remote_addr;\
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\
-        proxy_set_header X-Forwarded-Proto $scheme;\
-    }\
-    location /api/health {\
-        proxy_pass http://janus-service:4000/api/health;\
-        proxy_set_header Host $host;\
-        proxy_set_header X-Real-IP $remote_addr;\
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\
-        proxy_set_header X-Forwarded-Proto $scheme;\
-    }\
-}' > /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port 8080
 EXPOSE 8080

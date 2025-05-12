@@ -35,9 +35,10 @@ defmodule Janus.MixProject do
       {:phoenix, "~> 1.7.21"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
-      {:jason, "~> 1.2"},
+      {:jason, "~> 1.4"},
       {:dns_cluster, "~> 0.1.1"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:httpoison, "~> 2.0"}
     ]
   end
 
