@@ -1,32 +1,21 @@
-FROM ubuntu:24.04
+FROM ubuntu:22.04
 
-# Prepare for Odin install
-RUN apt update -qq \
-  && apt install -y llvm clang git build-essential libssl-dev
+# Odin needs llvm and clang for building itself as well as building .odin files on *Nix systems
+RUN apt-get update -qq \
+    && apt-get install -y llvm clang git build-essential
 
-# Install Odin
 WORKDIR /Odin-install
+# checkout specific commit so we have a tested version, since we're on the master branch
 RUN git clone https://github.com/odin-lang/Odin.git /Odin-install \
-  && git checkout dev-2025-03 \
-  && make
+    && git checkout dev-2024-02 \
+    && make
 
-# Cleanup after Odin install
 RUN mkdir /opt/Odin \
-  && cp -R ./base ./core ./shared ./vendor ./odin /opt/Odin/
+    && cp -R ./base ./core ./shared ./vendor ./odin /opt/Odin/
 WORKDIR /
-
 RUN rm -rf /Odin-install
 
-# Add Odin to path
 ENV PATH="/opt/Odin:${PATH}"
-# Move to /app
-WORKDIR /app
-
-# Download Odin http lib
-RUN git clone https://github.com/laytan/odin-http.git lib/odin-http
-
-# Copy Arvaker source files
-COPY src/ ./src/
 
 # Expose port 8080
 EXPOSE 8080

@@ -190,13 +190,13 @@ function deploy_arvaker {
   kubectl apply -f ./arvaker/service.yaml
 
   echo "Setting deployment to use image arvaker:$TAG..."
-  kubectl set image deployment/arvaker-deployment arvaker=arvaker:$TAG
+  kubectl set image deployment/arvaker arvaker=arvaker:$TAG
 
   echo "Restarting arvaker deployment..."
-  kubectl rollout restart deployment arvaker-deployment
+  kubectl rollout restart deployment arvaker
 
   echo "Waiting for deployment to complete..."
-  kubectl rollout status deployment arvaker-deployment
+  kubectl rollout status deployment arvaker
 
   echo "Arvaker deployed successfully!"
 }
