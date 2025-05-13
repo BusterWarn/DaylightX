@@ -1,20 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: arvaker-deployment
+  name: arvaker
+  labels:
+    app: arvaker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: arvaker-app
+      app: arvaker
   template:
     metadata:
       labels:
-        app: arvaker-app
+        app: arvaker
     spec:
       containers:
-      - name: arvaker-container
+      - name: arvaker
         image: arvaker:latest
         imagePullPolicy: Never
         ports:
-            - containerPort: 8080:8080
+            - containerPort: 8080
