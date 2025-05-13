@@ -9,6 +9,7 @@ DEPLOY_BUNPASS=false
 DEPLOY_DELOREAN=false
 DEPLOY_JANUS=false
 DEPLOY_ARVAKER=false
+DEPLOY_LUNAK=false
 DEPLOY_ALL=false
 
 # Display help information
@@ -19,9 +20,10 @@ function show_help {
   echo "  -A, --all        Deploy all services"
   echo "  -f, --frontend   Deploy frontend service"
   echo "  -b, --bunpass    Deploy bunpass service"
-  echo "  -d, --delorean    Deploy delorean service"
+  echo "  -d, --delorean   Deploy delorean service"
   echo "  -j, --janus      Deploy Janus service"
-  echo "  -a, --arvaker      Deploy Janus service"
+  echo "  -a, --arvaker    Deploy Janus service"
+  echo "  -l, --lunak      Deploy LunaK service"
   echo "Example: ./deploy.sh --frontend --bunpass"
   echo "Example: ./deploy.sh --all"
 }
@@ -57,6 +59,10 @@ while [[ $# -gt 0 ]]; do
     DEPLOY_ARVAKER=true
     shift
     ;;
+  -l | --lunak)
+    DEPLOY_LUNAK=true
+    shift
+    ;;
   *)
     echo "Unknown option: $1"
     show_help
@@ -72,6 +78,7 @@ if [[
   "$DEPLOY_BUNPASS" == "false" &&
   "$DEPLOY_DELOREAN" == "false" &&
   "$DEPLOY_JANUS" == "false" &&
+  "$DEPLOY_LUNAK" == "false" &&
   "$DEPLOY_ARVAKER" == "false" ]] \
   ; then
   echo "No services specified. What would you like to deploy?"
@@ -81,8 +88,9 @@ if [[
   echo "4) Delorean only"
   echo "5) Janus only"
   echo "6) Arvaker only"
-  echo "7) Exit"
-  read -p "Enter choice [1-7]: " choice
+  echo "7) LunaK only"
+  echo "8) Exit"
+  read -p "Enter choice [1-8]: " choice
 
   case $choice in
   1) DEPLOY_ALL=true ;;
@@ -91,7 +99,8 @@ if [[
   4) DEPLOY_DELOREAN=true ;;
   5) DEPLOY_JANUS=true ;;
   6) DEPLOY_ARVAKER=true ;;
-  7) exit 0 ;;
+  7) DEPLOY_LUNAK=true ;;
+  8) exit 0 ;;
   *)
     echo "Invalid choice. Exiting."
     exit 1
@@ -106,6 +115,7 @@ if [[ "$DEPLOY_ALL" == "true" ]]; then
   DEPLOY_DELOREAN=true
   DEPLOY_JANUS=true
   DEPLOY_ARVAKER=true
+  DEPLOY_LUNAK=true
 fi
 
 # Generate a unique tag
@@ -201,6 +211,30 @@ function deploy_arvaker {
   echo "Arvaker deployed successfully!"
 }
 
+# Function to deploy LunaK
+function deploy_lunak {
+  echo "===== Deploying LunaK ====="
+
+  echo "Building LunaK Docker image... $TAG"
+  docker build -t daylightx-lunak:$TAG ./LunaK/
+
+  echo "Applying kubernetes manifests..."
+  kubectl apply -f ./LunaK/kubernetes/LunaK.yaml
+
+  echo "Setting deployment to use image daylightx-lunak:$TAG..."
+  kubectl set image deployment/lunak-deployment lunak=daylightx-lunak:$TAG
+
+  echo "Restarting LunaK deployment..."
+  # Change this line to use lunak-deployment instead of LunaK
+  kubectl rollout restart deployment lunak-deployment
+
+  echo "Waiting for deployment to complete..."
+  # Change this line as well
+  kubectl rollout status deployment lunak-deployment
+
+  echo "LunaK deployed successfully!"
+}
+
 # Function to deploy janus
 function deploy_janus {
   echo "===== Deploying Janus ====="
@@ -250,6 +284,10 @@ if [[ "$DEPLOY_ARVAKER" == "true" ]]; then
   deploy_arvaker
 fi
 
+if [[ "$DEPLOY_LUNAK" == "true" ]]; then
+  deploy_lunak
+fi
+
 # Ensure frontend is deployed last
 if [[ "$DEPLOY_FRONTEND" == "true" ]]; then
   deploy_frontend
@@ -266,8 +304,8 @@ if [[ "$DEPLOY_FRONTEND" == "true" ]] || [[ "$DEPLOY_ALL" == "true" ]]; then
   fi
 fi
 
-if [[ "$DEPLOY_BUNPASS" == "true" ]] || [[ "$DEPLOY_ALL" == "true" ]]; then
-  echo "Bunpass (internal): http://bunpass-service:3000"
+if [[ "$DEPLOY_LUNAK" == "true" ]] || [[ "$DEPLOY_ALL" == "true" ]]; then
+  echo "LunaK (internal): http://lunak-service:8080"
 fi
 
 if [[ "$DEPLOY_DELOREAN" == "true" ]] || [[ "$DEPLOY_ALL" == "true" ]]; then
