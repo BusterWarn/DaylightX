@@ -10,7 +10,6 @@ defmodule JanusWeb.Router do
 
     get "/health", HealthController, :check
 
-    get "/location", LocationController, :timezone_get
-    post "/location", LocationController, :timezone
+    post "/location", LocationController, :location_data
   end
 end
