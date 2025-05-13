@@ -24,6 +24,8 @@ WORKDIR /app
 
 # Download Odin http lib
 RUN git clone https://github.com/laytan/odin-http.git lib/odin-http
+WORKDIR /app/lib/odin-http
+RUN git checkout 06965a6b34e2c1abe034ac76e1250bc6c849d170
 
 # Copy Arvaker source files
 COPY src/ ./src/
