@@ -4,14 +4,23 @@ defmodule JanusWeb.LocationController do
   # Service URLs
   @bunpass_service_url "http://bunpass-service:3000"
   @delorean_service_url "http://delorean-service:8000"
+  @arvaker_service_url "http://arvaker-service:8080"
+  @lunak_service_url "http://lunak-service:8080"
 
   # Handle POST request with location string
   def location_data(conn, %{"location" => location}) when is_binary(location) do
     with {:ok, location_data} <- get_coordinates_from_bunpass(location),
          {:ok, %{lat: lat, lon: lon}} <- extract_and_parse_coordinates(location_data),
-         {:ok, timezone_data} <- get_timezone_from_delorean(lat, lon) do
+         {:ok, timezone_data} <- get_timezone_from_delorean(lat, lon),
+         {:ok, sun_data} <- get_sun_data_from_arvaker(),
+         {:ok, moon_data} <- get_moon_data_from_lunak(lat, lon) do
       # Success: return combined data
-      response = Map.merge(location_data, timezone_data)
+      response =
+        location_data
+        |> Map.merge(timezone_data)
+        |> Map.put("sun_data", sun_data)
+        |> Map.put("moon_data", moon_data)
+
       json(conn, response)
     else
       {:error, :missing_coordinates} ->
@@ -25,6 +34,12 @@ defmodule JanusWeb.LocationController do
 
       {:error, {:delorean, reason}} ->
         send_error(conn, :service_unavailable, "Failed to get timezone: #{reason}")
+
+      {:error, {:arvaker, reason}} ->
+        send_error(conn, :service_unavailable, "Failed to get sun data: #{reason}")
+
+      {:error, {:lunak, reason}} ->
+        send_error(conn, :service_unavailable, "Failed to get moon data: #{reason}")
     end
   end
 
@@ -101,6 +116,26 @@ defmodule JanusWeb.LocationController do
 
   defp parse_float(value) when is_number(value), do: {:ok, value}
   defp parse_float(_), do: {:error, :invalid}
+
+  # Get sun data from arvaker service
+  defp get_sun_data_from_arvaker() do
+    {:ok, "sun is fun"}
+    #  TODO: Fix when arvaker works
+    # @arvaker_service_url
+    # |> make_http_get_request()
+    # |> handle_service_response(:arvaker)
+  end
+
+  # Get moon data from lunak service
+  defp get_moon_data_from_lunak(lat, lon) do
+    # Get current time in ISO8601 format
+    time = DateTime.utc_now() |> DateTime.to_iso8601()
+    url = "#{@lunak_service_url}/moon?latitude=#{lat}&longitude=#{lon}&time=#{time}"
+
+    url
+    |> make_http_get_request()
+    |> handle_service_response(:lunak)
+  end
 
   # Centralized error response
   defp send_error(conn, status, message) do
