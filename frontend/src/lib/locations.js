@@ -6,30 +6,7 @@ const DEFAULT_LOCATIONS = [
   { name: "Sydney", timezone: "Australia/Sydney", offset: 10 }
 ];
 
-/**
- * Fetches location data from the API, falling back to default locations if:
- * 1. The API request fails
- * 2. No API URL is configured (local development)
- */
 export async function getLocations() {
-  try {
-    const response = await fetch('/api/janus', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ location: 'Visby, Sweden' })
-    });
-    if (response.ok) {
-      const data = await response.json();
-      if (data) {
-        console.log(data);
-      }
-    }
-  } catch (error) {
-    console.error('Failed to fetch locations:', error);
-  }
-
   try {
     const response = await fetch(`/api/bunpass`);
     if (response.ok) {
@@ -44,3 +21,4 @@ export async function getLocations() {
   }
   return DEFAULT_LOCATIONS;
 }
+

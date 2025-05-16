@@ -5,15 +5,15 @@
 
   // Handle location change
   function handleSelect(event) {
-    const selectedLocation = locations.find(loc => loc.name === event.target.value);
+    const selectedLocation = locations.find(loc => loc === event.target.value);
     onSelect(selectedLocation);
   }
 </script>
 
 <div class="location-selector">
-  <select id="location" value={selected.name} on:change={handleSelect}>
+  <select id="location" value={selected} on:change={handleSelect}>
     {#each locations as location}
-      <option value={location.name}>{location.name}</option>
+      <option value={location}>{location}</option>
     {/each}
   </select>
 </div>

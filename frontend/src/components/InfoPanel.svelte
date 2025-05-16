@@ -1,6 +1,5 @@
 <script>
   export let time = new Date();
-  export let location = { name: "Local" };
   export let progress = 0;
   export let phase = "";
 
@@ -14,19 +13,20 @@
   }
 
   // Format progress as percentage
-  function formatProgress(prog) {
+  function formatProgress() {
     // Adjust range to 0-100 for day time
-    if (prog < 0) {
+    if (progress < 0) {
       // Pre-dawn: 0-25%
-      return Math.round((prog + 0.25) / 0.25 * 25);
-    } else if (prog > 1) {
+      return Math.round((progress + 0.25) / 0.25 * 25);
+    } else if (progress > 1) {
       // Night: 75-100%
-      return Math.round(75 + (prog - 1) / 0.25 * 25);
+      return Math.round(75 + (progress - 1) / 0.25 * 25);
     } else {
       // Day: 25-75%
-      return Math.round(25 + prog * 50);
+      return Math.round(25 + progress * 50);
     }
   }
+
 </script>
 
 <div class="info-panel">
@@ -37,7 +37,7 @@
     </div>
     <div class="info-row">
       <span class="info-label">Day Progress:</span>
-      <span class="info-value">{formatProgress(progress)}%</span>
+      <span class="info-value">{formatProgress()}%</span>
     </div>
     <div class="info-row">
       <span class="info-label">Phase:</span>

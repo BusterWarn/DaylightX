@@ -3,22 +3,13 @@
   import { getLocations } from './lib/locations';
   import SkyView from './components/SkyView.svelte';
 
-  const locations = [
-    { name: "Local", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, offset: 0 },
-    { name: "New York", timezone: "America/New_York", offset: -4 }, // EDT
-    { name: "Stockholm", timezone: "Europe/Stockholm", offset: 2 }, // CEST
-    { name: "Tokyo", timezone: "Asia/Tokyo", offset: 9 },
-    { name: "Sydney", timezone: "Australia/Sydney", offset: 10 }
-  ];
-
-  onMount(async () => {
-    // TODO: Make getting locations... Better. And async.
-    console.log(await getLocations());
-  });
+  const DEFAULT_TOP_LOCATION = "Umea, Sweden";
+  const DEFAULT_BOT_LOCATION = "Stockholm, Sweden";
 
   // Initial state for two views
-  let topLocation = locations[0]; // Default to local time
-  let bottomLocation = locations[3]; // Default to Tokyo
+  let topLocation = DEFAULT_TOP_LOCATION;
+  let bottomLocation = DEFAULT_BOT_LOCATION;
+  let locations = [];
   let currentTime = new Date();
   let updateInterval;
   let windowWidth = 0;
@@ -30,6 +21,7 @@
   }
 
   function setBottomLocation(location) {
+    console.log('set bottom location', location);
     bottomLocation = location;
   }
 
@@ -57,8 +49,9 @@
   }
 
   // Lifecycle hooks
-  onMount(() => {
+  onMount(async () => {
     startUpdateCycle();
+    locations = await getLocations();
   });
 
   onDestroy(() => {
@@ -75,7 +68,6 @@
       location={topLocation}
       locations={locations}
       onLocationChange={setTopLocation}
-      currentTime={currentTime}
       width={windowWidth}
       height={windowHeight / 2}
     />
@@ -90,7 +82,6 @@
       location={bottomLocation}
       locations={locations}
       onLocationChange={setBottomLocation}
-      currentTime={currentTime}
       width={windowWidth}
       height={windowHeight / 2}
     />

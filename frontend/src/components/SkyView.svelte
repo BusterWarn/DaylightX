@@ -10,161 +10,198 @@
   export let location;
   export let locations = [];
   export let onLocationChange;
-  export let currentTime = new Date();
   export let width = 1000;
   export let height = 500;
 
   // Initial state
-  let dayProgress = 0;
-  let dayPhase = '';
+  let isLoading = true;
+  let error = null;
+  let data = null;
+  let dayInfo = null;
 
-  /**
-  * Creates a date with a specified hour and minute offset from local time
-  * @param {Object} options - Options for time offset
-  * @param {number} [options.hourOffset=0] - Hours to offset (positive or negative)
-  * @param {number} [options.minuteOffset=0] - Minutes to offset (positive or negative)
-  * @returns {Date} - New date object with the specified offset applied
-  */
-  function getTimeWithOffset({ hourOffset = 0, minuteOffset = 0 } = {}) {
-    // Get current date
-    const date = new Date();
+  // Function to simulate fetching data that takes 2 seconds
+  async function fetchLocationData() {
+    try {
+      // Reset states at the beginning of fetch
+      isLoading = true;
+      error = null;
 
-    // Get current local hour and minute
-    const localHours = date.getHours();
-    const localMinutes = date.getMinutes();
+      const response = await fetch('/api/janus', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ location: location })
+      });
 
-    // Calculate new hour and minute with offset
-    const newHours = (localHours + hourOffset + Math.floor((localMinutes + minuteOffset) / 60)) % 24;
-    const newMinutes = (localMinutes + minuteOffset) % 60;
-
-    // Handle negative minutes
-    const adjustedHours = newHours + (newMinutes < 0 ? -1 : 0);
-    const adjustedMinutes = newMinutes < 0 ? newMinutes + 60 : newMinutes;
-
-    // Create a new date object
-    const newDate = new Date(date);
-
-    // Set the new hours and minutes
-    newDate.setHours(adjustedHours < 0 ? adjustedHours + 24 : adjustedHours);
-    newDate.setMinutes(adjustedMinutes);
-
-    return newDate;
+      // Set the data
+      data = await response.json();
+    } catch (e) {
+      // Handle any errors
+      error = e.message;
+    } finally {
+      // Always set loading to false when done
+      isLoading = false;
+    }
   }
 
   /**
-  * Creates a date for the current day with specified hours and minutes from midnight,
-  * with optional hour and minute offsets
-  * @param {Object} options - Options for time specification
-  * @param {number} [options.hours=0] - Base hours from midnight (0-23)
-  * @param {number} [options.minutes=0] - Base minutes from midnight (0-59)
-  * @param {number} [options.hourOffset=0] - Additional hours to offset (positive or negative)
-  * @param {number} [options.minuteOffset=0] - Additional minutes to offset (positive or negative)
-  * @returns {Date} - New date object set to the specified time on the current day
+  * Get a Date object with a specified UTC offset
+  * @param {number|string|undefined} offset - Hours offset from UTC (e.g., 2, "+2.0", "-3.5")
+  * @returns {Date} - Date object adjusted to the specified offset
   */
-  function getTimeOfDay({ hours = 0, minutes = 0, hourOffset = 0, minuteOffset = 0 } = {}) {
-    // Create a new date for today
-    const date = new Date();
-
-    // Reset to midnight
-    date.setHours(0, 0, 0, 0);
-
-    // Calculate total minutes, including offsets
-    const totalHours = hours + hourOffset;
-    const totalMinutes = minutes + minuteOffset;
-
-    // Calculate final hours and minutes, handling potential negative values
-    let finalHours = totalHours + Math.floor(totalMinutes / 60);
-    let finalMinutes = totalMinutes % 60;
-
-    // Handle negative minutes
-    if (finalMinutes < 0) {
-      finalMinutes += 60;
-      finalHours -= 1;
+  function getDateWithOffset(offset = 0) {
+    // Handle string offset format (e.g., "+2.0", "-3.5")
+    if (typeof offset === 'string') {
+      offset = parseFloat(offset);
     }
 
-    // Handle hour wrapping (keeping within same day)
-    while (finalHours < 0) finalHours += 24;
-    finalHours = finalHours % 24;
+    // Get current UTC time
+    const now = new Date();
+    const utcTimestamp = now.getTime();
 
-    // Set the time
-    date.setHours(finalHours, finalMinutes);
+    // Convert offset from hours to milliseconds and apply
+    const offsetMs = offset * 60 * 60 * 1000;
+    const adjustedTimestamp = utcTimestamp + offsetMs;
 
-    return date;
+    return new Date(adjustedTimestamp);
   }
 
-  // Calculate sunrise and sunset times
-  // For a real app, we would calculate the actual sunrise/sunset times
-  // based on date and geographical coordinates. For now, we'll use simplified times.
-  function calculateDayTimes(offset = 0) {
+  /**
+  * Enum for day phases
+  */
+  const DayPhase = {
+    PRE_DAWN: "Night (pre-dawn)",
+    SUNRISE: "Sunrise",
+    MORNING: "Morning",
+    MIDDAY: "Midday",
+    AFTERNOON: "Afternoon",
+    SUNSET: "Sunset",
+    NIGHT: "Night"
+  };
+
+  function getCurrentDayInfo(sunData, time) {
+    // Extract sun times from the data
+    const sunrise = new Date(sunData.properties.sunrise.time);
+    const sunset = new Date(sunData.properties.sunset.time);
+    const solarNoon = new Date(sunData.properties.solarnoon.time);
+    const solarMidnight = new Date(sunData.properties.solarmidnight.time);
+
+    // Determine which phase we're in by comparing times
+    let phase, progressInPhase;
+
+    // Calculate next solar midnight (for night calculations)
+    let nextSolarMidnight = new Date(solarMidnight);
+    if (nextSolarMidnight < sunrise) {
+      nextSolarMidnight.setDate(nextSolarMidnight.getDate() + 1);
+    }
+
+    // Calculate previous solar midnight (for pre-dawn calculations)
+    let prevSolarMidnight = new Date(solarMidnight);
+    if (prevSolarMidnight > sunrise) {
+      prevSolarMidnight.setDate(prevSolarMidnight.getDate() - 1);
+    }
+
+    // Calculate sunrise transition (10% of the time from sunrise to noon)
+    const sunriseDuration = (solarNoon.getTime() - sunrise.getTime()) * 0.1;
+    const sunriseEnd = new Date(sunrise.getTime() + sunriseDuration);
+
+    // Calculate sunset transition (10% of the time from noon to sunset)
+    const sunsetDuration = (sunset.getTime() - solarNoon.getTime()) * 0.1;
+    const sunsetStart = new Date(sunset.getTime() - sunsetDuration);
+
+    // Define morning and afternoon boundaries
+    const morningEnd = new Date(solarNoon.getTime() - (solarNoon.getTime() - sunrise.getTime()) * 0.2); // 80% from sunrise to noon
+    const afternoonStart = new Date(solarNoon.getTime() + (sunset.getTime() - solarNoon.getTime()) * 0.2); // 20% from noon to sunset
+
+    // Determine the current phase and calculate progress within that phase
+    if (time >= prevSolarMidnight && time < sunrise) {
+      // Pre-dawn (from previous solar midnight to sunrise)
+      phase = DayPhase.PRE_DAWN;
+      progressInPhase = (time.getTime() - prevSolarMidnight.getTime()) / (sunrise.getTime() - prevSolarMidnight.getTime());
+    } else if (time >= sunrise && time < sunriseEnd) {
+      // Sunrise
+      phase = DayPhase.SUNRISE;
+      progressInPhase = (time.getTime() - sunrise.getTime()) / sunriseDuration;
+    } else if (time >= sunriseEnd && time < morningEnd) {
+      // Morning
+      phase = DayPhase.MORNING;
+      progressInPhase = (time.getTime() - sunriseEnd.getTime()) / (morningEnd.getTime() - sunriseEnd.getTime());
+    } else if (time >= morningEnd && time < afternoonStart) {
+      // Midday
+      phase = DayPhase.MIDDAY;
+      progressInPhase = (time.getTime() - morningEnd.getTime()) / (afternoonStart.getTime() - morningEnd.getTime());
+    } else if (time >= afternoonStart && time < sunsetStart) {
+      // Afternoon
+      phase = DayPhase.AFTERNOON;
+      progressInPhase = (time.getTime() - afternoonStart.getTime()) / (sunsetStart.getTime() - afternoonStart.getTime());
+    } else if (time >= sunsetStart && time < sunset) {
+      // Sunset
+      phase = DayPhase.SUNSET;
+      progressInPhase = (time.getTime() - sunsetStart.getTime()) / sunsetDuration;
+    } else {
+      // Night (from sunset to next solar midnight)
+      phase = DayPhase.NIGHT;
+      progressInPhase = (time.getTime() - sunset.getTime()) / (nextSolarMidnight.getTime() - sunset.getTime());
+    }
+
+    // Calculate overall day progress (-0.25 to 1.25)
+    const dayProgress = calculateOverallDayProgress(time, sunrise, sunset, prevSolarMidnight, nextSolarMidnight);
+
     return {
-      sunriseTime: getTimeOfDay({ hours: 6, minutes: 0, hourOffset: offset }),
-      sunsetTime: getTimeOfDay({ hours: 18, minutes: 0, hourOffset: offset })
+      phase: phase,
+      progressInPhase: Math.min(1, Math.max(0, progressInPhase)), // Ensure progress is between 0 and 1
+      dayProgress: dayProgress
     };
   }
 
-  /**
-  * Maps a time value from one range to another
-  * @param {Date} time - The time to map
-  * @param {Date} startTime - Start of the input range
-  * @param {Date} endTime - End of the input range
-  * @param {number} outMin - Start of the output range
-  * @param {number} outMax - End of the output range
-  * @returns {number} - Mapped value
-  */
-  function mapTimeRange(time, startTime, endTime, outMin, outMax) {
-    const timeValue = time.getTime();
-    const startValue = startTime.getTime();
-    const endValue = endTime.getTime();
+  function setDayInfo(sunData, utcOffset) {
+    const time = getDateWithOffset(utcOffset);
+    const info = getCurrentDayInfo(sunData, time);
 
-    // Calculate percentage within range
-    const percentage = (timeValue - startValue) / (endValue - startValue);
+    // Calculate percentage for display (0-100%)
+    const percentInPhase = Math.round(info.progressInPhase * 100);
 
-    // Map to output range
-    return outMin + percentage * (outMax - outMin);
+    dayInfo = {
+      time: time,
+      phase: info.phase,
+      progressInPhase: info.progressInPhase,
+      percentInPhase: percentInPhase,
+      dayProgress: info.dayProgress,
+      isDay: info.phase !== DayPhase.NIGHT && info.phase !== DayPhase.PRE_DAWN,
+      displayText: `${info.phase} (${percentInPhase}%)`
+    };
   }
 
-  /**
-  * Determines the day phase based on day progress value
-  * @param {number} progress - Day progress value (-0.25 to 1.25)
-  * @returns {string} - Human-readable day phase
-  */
-  function getDayPhase(progress) {
-    if (progress < 0) return "Night (pre-dawn)";
-    if (progress < 0.1) return "Sunrise";
-    if (progress < 0.4) return "Morning";
-    if (progress < 0.6) return "Midday";
-    if (progress < 0.9) return "Afternoon";
-    if (progress < 1) return "Sunset";
-    return "Night";
-  }
+  function calculateOverallDayProgress(time, sunrise, sunset, prevMidnight, nextMidnight) {
+    // Total day cycle duration
+    const cycleDuration = nextMidnight.getTime() - prevMidnight.getTime();
 
-  /**
-  * Calculate sun position and day phase based on current time
-  * @param {Object} location - Location information with timezone offset
-  * @param {Date} sunriseTime - Today's sunrise time
-  * @param {Date} sunsetTime - Today's sunset time
-  * @returns {number} dayProgress (0-1.25)
-  */
-  function calculateDayProgress(location, sunriseTime, sunsetTime) {
-    // Get current time adjusted for location's timezone
-    const now = getTimeWithOffset({ hourOffset: location.offset });
+    // Time since previous solar midnight
+    let timeSinceMidnight = time.getTime() - prevMidnight.getTime();
 
-    // Get midnight and next midnight for calculations
-    const midnight = getTimeOfDay({});
-    const nextMidnight = getTimeOfDay({ hours: 24 });
-
-    // Calculate progress based on time of day
-    if (now < sunriseTime) {
-      // Before sunrise (night): -0.25 to 0
-      return mapTimeRange(now, midnight, sunriseTime, -0.25, 0);
-    } else if (now > sunsetTime) {
-      // After sunset (night): 1 to 1.25
-      return mapTimeRange(now, sunsetTime, nextMidnight, 1, 1.25);
-    } else {
-      // During day: 0 to 1
-      return mapTimeRange(now, sunriseTime, sunsetTime, 0, 1);
+    // Ensure positive value (handles case when time is before prevMidnight)
+    if (timeSinceMidnight < 0) {
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      timeSinceMidnight += oneDayMs;
     }
+
+    // Calculate fraction of full cycle
+    const cycleFraction = timeSinceMidnight / cycleDuration;
+
+    // Map 0-1 cycle fraction to -0.25 to 1.25 range
+    return -0.25 + (cycleFraction * 1.5);
   }
+
+  $: if (location) {
+    fetchLocationData();
+  }
+
+  $: if (data) {
+    setDayInfo(data.sun_data, data.utc_offset);
+  }
+
+  /* ===== Style helper functions ===== */
 
   // Get sky color based on time of day
   function getSkyColor(progress) {
@@ -206,67 +243,64 @@
     }
   }
 
-  // Update view when location or time changes
-  $: if (location || currentTime) {
-    currentTime = getTimeWithOffset({ hourOffset: location.offset });
-    const { sunriseTime, sunsetTime } = calculateDayTimes();
-    dayProgress = calculateDayProgress(location, sunriseTime, sunsetTime);
-    dayPhase = getDayPhase(dayProgress);
+  function getStarsOpacity(dayProgress) {
+    if (dayProgress > 0.2 && dayProgress < 0.8)
+      return 0;
+
+    if (dayProgress < 0 || dayProgress > 1)
+      return 1;
+
+    if (dayProgress < 0.1)
+      return 1 - (dayProgress / 0.1);
+
+    // Dayprogress > 0.9
+    return (dayProgress - 0.9) / 0.1;
   }
 
-  // Initialize on mount
-  onMount(() => {
-    const { sunriseTime, sunsetTime } = calculateDayTimes();
-    dayProgress = calculateDayProgress(location, sunriseTime, sunsetTime);
-    dayPhase = getDayPhase(dayProgress);
-  });
 </script>
 
-<div
-  style="background-color: {getSkyColor(dayProgress)};"
-  class="sky-view"
->
-  <div class="sky"></div>
+{#if dayInfo && !isLoading}
+  <div
+    style="background-color: {getSkyColor(dayInfo.dayProgress)};"
+    class="sky-view"
+  >
+    <div class="sky"></div>
 
-  {#if dayProgress < 0.2 || dayProgress > 0.8}
-    <Stars opacity={dayProgress < 0 || dayProgress > 1 ? 1 :
-                     dayProgress < 0.1 ? 1 - dayProgress/0.1 :
-                     dayProgress > 0.9 ? (dayProgress-0.9)/0.1 : 0} />
-  {/if}
+    <Stars opacity={getStarsOpacity(dayInfo.dayProgress)} />
 
-  {#if dayProgress >= 0 && dayProgress <= 1}
-    <Sun
-      progress={dayProgress}
-      width={width}
-      height={height}
-    />
-  {/if}
+    {#if dayInfo.dayProgress >= 0 && dayInfo.dayProgress <= 1}
+      <Sun
+        progress={dayInfo.dayProgress}
+        width={width}
+        height={height}
+      />
+    {/if}
 
-  {#if dayProgress < 0 || dayProgress > 1}
-    <Moon
-      progress={(dayProgress + 0.5) % 1}
-      width={width}
-      height={height}
-    />
-  {/if}
+    {#if dayInfo.dayProgress < 0 || dayInfo.dayProgress > 1}
+      <Moon
+        progress={(dayInfo.dayProgress + 0.5) % 1}
+        width={width}
+        height={height}
+      />
+    {/if}
 
-  <div class="ground" style="background: {getGroundColor(dayProgress)};"></div>
+    <div class="ground" style="background: {getGroundColor(dayInfo.dayProgress)};"></div>
 
-  <div class="controls">
-    <LocationSelector
-      locations={locations}
-      selected={location}
-      onSelect={onLocationChange}
+    <div class="controls">
+      <LocationSelector
+        locations={locations}
+        selected={location}
+        onSelect={onLocationChange}
+      />
+    </div>
+
+    <InfoPanel
+      time={dayInfo.time}
+      progress={dayInfo.dayProgress}
+      phase={dayInfo.phase}
     />
   </div>
-
-  <InfoPanel
-    time={currentTime}
-    location={location}
-    progress={dayProgress}
-    phase={dayPhase}
-  />
-</div>
+{/if}
 
 <style>
   .sky-view {
