@@ -12,7 +12,7 @@ defmodule JanusWeb.LocationController do
     with {:ok, location_data} <- get_coordinates_from_bunpass(location),
          {:ok, %{lat: lat, lon: lon}} <- extract_and_parse_coordinates(location_data),
          {:ok, timezone_data} <- get_timezone_from_delorean(lat, lon),
-         {:ok, sun_data} <- get_sun_data_from_arvaker(),
+         {:ok, sun_data} <- get_sun_data_from_arvaker(lat, lon, timezone_data["utc_offset"]),
          {:ok, moon_data} <- get_moon_data_from_lunak(lat, lon) do
       # Success: return combined data
       response =
@@ -117,14 +117,44 @@ defmodule JanusWeb.LocationController do
   defp parse_float(value) when is_number(value), do: {:ok, value}
   defp parse_float(_), do: {:error, :invalid}
 
-  # Get sun data from arvaker service
-  defp get_sun_data_from_arvaker() do
-    {:ok, "sun is fun"}
-    #  TODO: Fix when arvaker works
-    # @arvaker_service_url
-    # |> make_http_get_request()
-    # |> handle_service_response(:arvaker)
+# Get sun data from arvaker service
+defp get_sun_data_from_arvaker(lat, lon, utc_offset) do
+  formatted_offset = format_utc_offset(utc_offset)
+
+  url = @arvaker_service_url <> "/?" <>
+        "latitude=#{lat}&" <>
+        "longitude=#{lon}&" <>
+        "date=#{Date.utc_today() |> Date.to_string()}&" <>
+        "offset=#{formatted_offset}"
+  url
+  |> make_http_get_request()
+  |> handle_service_response(:arvaker)
+end
+
+# Format UTC offset to proper "+HH:MM" format
+defp format_utc_offset(offset) when is_binary(offset) do
+  # Check if it's already in proper format ("+HH:MM")
+  if Regex.match?(~r/^[+-]\d{2}:\d{2}$/, offset) do
+    offset
+  else
+    # Try to convert string to number and format
+    case Float.parse(offset) do
+      {num, _} -> format_utc_offset(num)
+      :error -> "+00:00" # Default to UTC if unable to parse
+    end
   end
+end
+
+defp format_utc_offset(offset) when is_number(offset) do
+  # Convert numeric offset to proper string format
+  hours = trunc(offset)
+  minutes = trunc((abs(offset) - abs(hours)) * 60)
+  sign = if offset >= 0, do: "+", else: "-"
+  "#{sign}#{String.pad_leading("#{abs(hours)}", 2, "0")}:#{String.pad_leading("#{minutes}", 2, "0")}"
+end
+
+# Default for any other type
+defp format_utc_offset(_), do: "+00:00"
 
   # Get moon data from lunak service
   defp get_moon_data_from_lunak(lat, lon) do
