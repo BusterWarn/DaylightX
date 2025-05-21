@@ -10,6 +10,7 @@ DEPLOY_DELOREAN=false
 DEPLOY_JANUS=false
 DEPLOY_ARVAKER=false
 DEPLOY_LUNAK=false
+DEPLOY_REDIS=false
 DEPLOY_ALL=false
 
 # Display help information
@@ -24,6 +25,7 @@ function show_help {
   echo "  -j, --janus      Deploy Janus service"
   echo "  -a, --arvaker    Deploy Janus service"
   echo "  -l, --lunak      Deploy LunaK service"
+  echo "  -r, --redis      Deploy Redis cache"
   echo "Example: ./deploy.sh --frontend --bunpass"
   echo "Example: ./deploy.sh --all"
 }
@@ -63,6 +65,10 @@ while [[ $# -gt 0 ]]; do
     DEPLOY_LUNAK=true
     shift
     ;;
+  -r | --redis)
+    DEPLOY_REDIS=true
+    shift
+    ;;
   *)
     echo "Unknown option: $1"
     show_help
@@ -79,7 +85,8 @@ if [[
   "$DEPLOY_DELOREAN" == "false" &&
   "$DEPLOY_JANUS" == "false" &&
   "$DEPLOY_LUNAK" == "false" &&
-  "$DEPLOY_ARVAKER" == "false" ]] \
+  "$DEPLOY_ARVAKER" == "false" &&
+  "$DEPLOY_REDIS" == "false" ]] \
   ; then
   echo "No services specified. What would you like to deploy?"
   echo "1) All services"
@@ -89,8 +96,9 @@ if [[
   echo "5) Janus only"
   echo "6) Arvaker only"
   echo "7) LunaK only"
-  echo "8) Exit"
-  read -p "Enter choice [1-8]: " choice
+  echo "8) Redis cache only"
+  echo "9) Exit"
+  read -p "Enter choice [1-9]: " choice
 
   case $choice in
   1) DEPLOY_ALL=true ;;
@@ -100,7 +108,8 @@ if [[
   5) DEPLOY_JANUS=true ;;
   6) DEPLOY_ARVAKER=true ;;
   7) DEPLOY_LUNAK=true ;;
-  8) exit 0 ;;
+  8) DEPLOY_REDIS=true ;;
+  9) exit 0 ;;
   *)
     echo "Invalid choice. Exiting."
     exit 1
@@ -116,6 +125,7 @@ if [[ "$DEPLOY_ALL" == "true" ]]; then
   DEPLOY_JANUS=true
   DEPLOY_ARVAKER=true
   DEPLOY_LUNAK=true
+  DEPLOY_REDIS=true
 fi
 
 # Generate a unique tag
@@ -267,7 +277,181 @@ function deploy_janus {
   echo "Janus deployed successfully!"
 }
 
+# Function to deploy Redis
+function deploy_redis {
+  echo "===== Deploying Redis Cache ====="
+
+  # Check if Helm is installed
+  if ! command -v helm &>/dev/null; then
+    echo "Helm could not be found. You need to install Helm first."
+    echo "Run the following commands to install Helm:"
+    echo ""
+    echo "# Add the Helm repository GPG key"
+    echo "curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null"
+    echo ""
+    echo "# Add the Helm repository"
+    echo "echo \"deb [arch=\$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main\" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list"
+    echo ""
+    echo "# Update package list"
+    echo "sudo apt update"
+    echo ""
+    echo "# Install Helm"
+    echo "sudo apt install helm"
+    echo ""
+    echo "After installing Helm, run this script again with the --redis flag."
+    return 1
+  fi
+
+  # Add Bitnami repo if it doesn't exist
+  if ! helm repo list | grep -q "bitnami"; then
+    echo "Adding Bitnami Helm repository..."
+    helm repo add bitnami https://charts.bitnami.com/bitnami
+    helm repo update
+  fi
+
+  # Generate a random password for Redis
+  REDIS_PASSWORD=$(openssl rand -base64 16)
+
+  # Create a values file for Redis configuration
+  REDIS_VALUES_FILE="redis-values.yaml"
+  echo "# Redis values for deployment" >$REDIS_VALUES_FILE
+  echo "auth:" >>$REDIS_VALUES_FILE
+  echo "  password: \"$REDIS_PASSWORD\"" >>$REDIS_VALUES_FILE
+  echo "master:" >>$REDIS_VALUES_FILE
+  echo "  persistence:" >>$REDIS_VALUES_FILE
+  echo "    enabled: true" >>$REDIS_VALUES_FILE
+  echo "  resources:" >>$REDIS_VALUES_FILE
+  echo "    requests:" >>$REDIS_VALUES_FILE
+  echo "      memory: 128Mi" >>$REDIS_VALUES_FILE
+  echo "      cpu: 100m" >>$REDIS_VALUES_FILE
+  echo "replica:" >>$REDIS_VALUES_FILE
+  echo "  replicaCount: 1" >>$REDIS_VALUES_FILE
+  echo "  persistence:" >>$REDIS_VALUES_FILE
+  echo "    enabled: true" >>$REDIS_VALUES_FILE
+  echo "  resources:" >>$REDIS_VALUES_FILE
+  echo "    requests:" >>$REDIS_VALUES_FILE
+  echo "      memory: 128Mi" >>$REDIS_VALUES_FILE
+  echo "      cpu: 100m" >>$REDIS_VALUES_FILE
+
+  # Check if Redis is already deployed
+  if helm list | grep -q "redis"; then
+    echo "Redis is already deployed. Upgrading with new configuration..."
+    helm upgrade redis bitnami/redis -f $REDIS_VALUES_FILE
+  else
+    echo "Installing Redis using Helm..."
+    helm install redis bitnami/redis -f $REDIS_VALUES_FILE
+  fi
+
+  # Wait for Redis to be ready
+  echo "Waiting for Redis deployment to complete..."
+  kubectl rollout status statefulset/redis-master
+  kubectl rollout status statefulset/redis-replicas
+
+  # Store the password in a Kubernetes secret for applications to use
+  echo "Creating Kubernetes secret with Redis credentials..."
+  kubectl create secret generic redis-credentials \
+    --from-literal=redis-password=$REDIS_PASSWORD \
+    --from-literal=redis-host=redis-master \
+    --from-literal=redis-port=6379 \
+    --dry-run=client -o yaml | kubectl apply -f -
+
+  echo "Redis deployed successfully!"
+  echo ""
+  echo "Redis connection information:"
+  echo "  Host: redis-master"
+  echo "  Port: 6379"
+  echo "  Password has been stored in Kubernetes secret 'redis-credentials'"
+  echo ""
+  echo "To retrieve the Redis password:"
+  echo "  kubectl get secret redis-credentials -o jsonpath='{.data.redis-password}' | base64 --decode"
+  echo ""
+  echo "To connect to Redis from within the cluster:"
+  echo "  kubectl exec -it redis-master-0 -- redis-cli -a \$(kubectl get secret redis-credentials -o jsonpath='{.data.redis-password}' | base64 --decode)"
+  echo ""
+  echo "To update your microservices to use Redis cache:"
+  echo "  1. Add environment variables from the 'redis-credentials' secret"
+  echo "  2. Update your code to use the Redis client with the provided credentials"
+  echo "  3. Redeploy your microservices to apply the changes"
+
+  # Create a ConfigMap with example code for using Redis in different languages
+  echo "Creating ConfigMap with Redis usage examples..."
+  cat <<EOL >redis-examples-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-examples
+data:
+  nodejs-example.js: |
+    // Example Redis usage in Node.js
+    const Redis = require('ioredis');
+
+    // Connection using environment variables
+    const redis = new Redis({
+      host: process.env.REDIS_HOST || 'redis-master',
+      port: process.env.REDIS_PORT || 6379,
+      password: process.env.REDIS_PASSWORD
+    });
+
+    // Example cache implementation
+    async function getDataWithCache(key) {
+      // Try to get from cache
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log('Cache hit');
+        return JSON.parse(cachedData);
+      }
+
+      console.log('Cache miss');
+      // Fetch from API or database
+      const data = await fetchFromApi();
+
+      // Store in cache with TTL (1 hour)
+      await redis.set(key, JSON.stringify(data), 'EX', 3600);
+
+      return data;
+    }
+
+  python-example.py: |
+    # Example Redis usage in Python
+    import redis
+    import json
+    import os
+
+    # Connection using environment variables
+    r = redis.Redis(
+        host=os.environ.get('REDIS_HOST', 'redis-master'),
+        port=os.environ.get('REDIS_PORT', 6379),
+        password=os.environ.get('REDIS_PASSWORD', '')
+    )
+
+    # Example cache implementation
+    def get_data_with_cache(key):
+        # Try to get from cache
+        cached_data = r.get(key)
+        if cached_data:
+            print('Cache hit')
+            return json.loads(cached_data)
+
+        print('Cache miss')
+        # Fetch from API or database
+        data = fetch_from_api()
+
+        # Store in cache with TTL (1 hour)
+        r.setex(key, 3600, json.dumps(data))
+
+        return data
+EOL
+
+  kubectl apply -f redis-examples-configmap.yaml
+  echo "Created ConfigMap 'redis-examples' with sample code."
+  echo "View examples with: kubectl get configmap redis-examples -o yaml"
+}
+
 # Deploy services according to flags
+if [[ "$DEPLOY_REDIS" == "true" ]]; then
+  deploy_redis
+fi
+
 if [[ "$DEPLOY_BUNPASS" == "true" ]]; then
   deploy_bunpass
 fi
@@ -318,6 +502,11 @@ fi
 
 if [[ "$DEPLOY_ARVAKER" == "true" ]] || [[ "$DEPLOY_ALL" == "true" ]]; then
   echo "Arvaker (internal): http://arvaker-service:8000"
+fi
+
+if [[ "$DEPLOY_REDIS" == "true" ]] || [[ "$DEPLOY_ALL" == "true" ]]; then
+  echo "Redis Cache (internal): redis-master:6379"
+  echo "Redis Secret: kubectl get secret redis-credentials -o jsonpath='{.data.redis-password}' | base64 --decode"
 fi
 
 echo ""

@@ -1,0 +1,18 @@
+# Redis values for deployment
+auth:
+  password: "GR5ZEBGiXAi882oXEXW8nw=="
+master:
+  persistence:
+    enabled: true
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+replica:
+  replicaCount: 1
+  persistence:
+    enabled: true
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
