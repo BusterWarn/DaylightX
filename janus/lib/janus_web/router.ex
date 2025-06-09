@@ -11,5 +11,7 @@ defmodule JanusWeb.Router do
     get "/health", HealthController, :check
 
     post "/location", LocationController, :location_data
+
+    get "/redis", RedisController, :check
   end
 end

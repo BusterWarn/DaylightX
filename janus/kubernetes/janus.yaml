@@ -15,19 +15,28 @@ spec:
         app: janus
     spec:
       containers:
-      - name: janus
-        image: daylightx-janus:latest
-        imagePullPolicy: Never
-        ports:
-        - containerPort: 4000
-        env:
-        - name: SECRET_KEY_BASE
-          valueFrom:
-            secretKeyRef:
-              name: janus-secrets
-              key: SECRET_KEY_BASE
-        - name: PHX_SERVER
-          value: "true"
+        - name: janus
+          image: daylightx-janus:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 4000
+          env:
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: janus-secrets
+                  key: SECRET_KEY_BASE
+            - name: PHX_SERVER
+              value: "true"
+            - name: REDIS_HOST
+              value: "redis-master.default.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials # The name of the secret
+                  key: redis-password # The key inside the secret
 ---
 apiVersion: v1
 kind: Service
@@ -41,4 +50,3 @@ spec:
     - protocol: TCP
       port: 4000
       targetPort: 4000
-

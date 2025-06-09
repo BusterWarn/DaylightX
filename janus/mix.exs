@@ -38,7 +38,8 @@ defmodule Janus.MixProject do
       {:jason, "~> 1.4"},
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.5"},
-      {:httpoison, "~> 2.0"}
+      {:httpoison, "~> 2.0"},
+      {:redix, ">= 1.0.0"}
     ]
   end
 
